@@ -1,72 +1,72 @@
-from ovos_workshop.skills.video_collection import VideoCollectionSkill
-from mycroft.skills.core import intent_file_handler
-from pyvod import Collection, Media
-from os.path import join, dirname, basename
-from ovos_workshop.frameworks.cps import CPSMatchType, CPSPlayback, \
-    CPSMatchConfidence
+from os.path import join, dirname
+
+from ovos_plugin_common_play.ocp import MediaType, PlaybackType
+from ovos_workshop.skills.common_play import OVOSCommonPlaybackSkill, \
+    ocp_search, ocp_featured_media
+from youtube_archivist import IAArchivist
 
 
-class CinemocracySkill(VideoCollectionSkill):
+class CinemocracySkill(OVOSCommonPlaybackSkill):
 
     def __init__(self):
         super().__init__("Cinemocracy")
-        self.supported_media = [CPSMatchType.GENERIC,
-                                CPSMatchType.VIDEO]
-        self.message_namespace = basename(dirname(__file__)) + ".jarbasskills"
-        # load video catalog
-        path = join(dirname(__file__), "res", "cinemocracy.jsondb")
-        logo = join(dirname(__file__), "res", "cinemocracy.png")
-        self.media_collection = Collection("cinemocracy", logo=logo, db_path=path)
-        self.default_image = join(dirname(__file__), "ui", "cinemocracy.png")
-        self.skill_logo = join(dirname(__file__), "ui", "cinemocracy.png")
+        self.supported_media = [MediaType.GENERIC,
+                                MediaType.DOCUMENTARY]
         self.skill_icon = join(dirname(__file__), "ui", "cinemocracy.png")
         self.default_bg = join(dirname(__file__), "ui", "bg.jpeg")
-        self.media_type = CPSMatchType.VIDEO
-        self.playback_type = CPSPlayback.GUI
+        self.archive = IAArchivist("cinemocracy")
 
-    # voice interaction
-    def get_intro_message(self):
-        self.speak_dialog("intro")
+    def initialize(self):
+        if len(self.archive.db) == 0:
+            # no database, download from url TODO
+            self.archive.archive_collection("cinemocracy")
 
-    @intent_file_handler('home.intent')
-    def handle_homescreen_utterance(self, message):
-        self.handle_homescreen(message)
-
-    # better common play
-    def normalize_title(self, title):
-        title = title.lower().strip()
-        title = self.remove_voc(title, "cinemocracy")
-        title = self.remove_voc(title, "movie")
-        title = self.remove_voc(title, "play")
-        title = self.remove_voc(title, "video")
-        title = title.replace("|", "").replace('"', "") \
-            .replace(':', "").replace('”', "").replace('“', "") \
-            .strip()
-        return " ".join([w for w in title.split(" ") if w])  # remove extra spaces
-
-    def match_media_type(self, phrase, media_type):
+    def match_skill(self, phrase, media_type):
         score = 0
-        if self.voc_match(phrase, "video") or media_type == CPSMatchType.VIDEO:
-            score += 10
-
+        if self.voc_match(phrase, "cinemocracy", exact=True):
+            return 100
         if self.voc_match(phrase, "old"):
             score += 10
-
         if self.voc_match(phrase, "real"):
             score += 15
-
         if self.voc_match(phrase, "war"):
             score += 20
-
         if self.voc_match(phrase, "propaganda"):
             score += 20
-
         if self.voc_match(phrase, "cinemocracy"):
             score += 50
-
         return score
+
+    @ocp_search()
+    def search_db(self, phrase, media_type):
+        score = self.match_skill(phrase, media_type)
+        if score >= 50:
+            yield {
+                "match_confidence": score,
+                "media_type": MediaType.DOCUMENTARY,
+                "playlist": self.featured_media(),
+                "playback": PlaybackType.VIDEO,
+                "skill_icon": self.skill_icon,
+                "image": self.skill_icon,
+                "skill_id": self.skill_id,
+                "title": "Cinemocracy",
+                "author": "Internet Archive"
+            }
+
+    @ocp_featured_media()
+    def featured_media(self):
+        return [{
+                "title": video["title"],
+                "image": self.skill_icon,
+                "match_confidence": 70,
+                "media_type": MediaType.DOCUMENTARY,
+                "uri": video["streams"][0],  # TODO format selection
+                "playback": PlaybackType.VIDEO,
+                "skill_icon": self.skill_icon,
+                "skill_id": self.skill_id
+            } for _, video in self.archive.db.items() if video.get("streams")]
+
 
 
 def create_skill():
     return CinemocracySkill()
-
