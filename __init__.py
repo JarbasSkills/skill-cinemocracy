@@ -17,9 +17,8 @@ class CinemocracySkill(OVOSCommonPlaybackSkill):
         self.archive = IAArchivist("cinemocracy")
 
     def initialize(self):
-        if len(self.archive.db) == 0:
-            # no database, download from url TODO
-            self.archive.archive_collection("cinemocracy")
+        self.archive.bootstrap_from_url(
+            f"https://github.com/OpenJarbas/streamindex/raw/main/{self.archive.db.name}.json")
 
     def match_skill(self, phrase, media_type):
         score = 0
@@ -56,16 +55,15 @@ class CinemocracySkill(OVOSCommonPlaybackSkill):
     @ocp_featured_media()
     def featured_media(self):
         return [{
-                "title": video["title"],
-                "image": self.skill_icon,
-                "match_confidence": 70,
-                "media_type": MediaType.DOCUMENTARY,
-                "uri": video["streams"][0],  # TODO format selection
-                "playback": PlaybackType.VIDEO,
-                "skill_icon": self.skill_icon,
-                "skill_id": self.skill_id
-            } for _, video in self.archive.db.items() if video.get("streams")]
-
+            "title": video["title"],
+            "image": self.skill_icon,
+            "match_confidence": 70,
+            "media_type": MediaType.DOCUMENTARY,
+            "uri": video["streams"][0],  # TODO format selection
+            "playback": PlaybackType.VIDEO,
+            "skill_icon": self.skill_icon,
+            "skill_id": self.skill_id
+        } for _, video in self.archive.db.items() if video.get("streams")]
 
 
 def create_skill():
